@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要发布的 tag，例如 v1.0.0（手动触发时必填）"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: 单元测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: 安装 xvfb（让 GUI 用例也能跑）
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb
+      - name: pytest
+        run: xvfb-run -a python -m pytest -q
+
+  build-exe:
+    name: 编译 Windows EXE
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 安装依赖与 PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+      - name: PyInstaller 打包（GUI 单文件，无控制台）
+        run: pyinstaller --onefile --windowed --clean --noconfirm --name mihoyo-stoken-login-gui stoken_login_gui.py
+      - name: 冒烟测试（产物能启动并正常退出）
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist\mihoyo-stoken-login-gui.exe")) { throw "没有生成 exe" }
+          & "dist\mihoyo-stoken-login-gui.exe" --version
+          Write-Host "exe --version 退出码: $LASTEXITCODE"
+          Get-Item "dist\mihoyo-stoken-login-gui.exe" | Select-Object Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mihoyo-stoken-login-gui-exe
+          path: dist/mihoyo-stoken-login-gui.exe
+          if-no-files-found: error
+
+  release:
+    name: 发布 Release
+    needs: build-exe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: 收集发布文件
+        run: |
+          ls -la release/
+          cp README.md LICENSE release/
+      - name: 创建 GitHub Release（附 exe；Linux/macOS 用仓库源码运行）
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: ${{ inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          body: |
+            ## 下载
+
+            - **Windows**：下载下面的 `mihoyo-stoken-login-gui.exe`，双击即可（单文件，不需要装 Python）
+
+            ## Linux / macOS
+
+            直接跑源码（tkinter 是 Python 标准库）：
+
+            ```bash
+            git clone https://github.com/gggssepgf/mihoyo-stoken-login.git
+            cd mihoyo-stoken-login
+            python3 -m pip install -r requirements.txt
+            python3 stoken_login_gui.py        # 图形界面
+            python3 stoken_login.py --help     # 命令行版
+            ```
+
+            Debian/Ubuntu 若提示没有 tkinter：`sudo apt install python3-tk`。
+          files: release/*

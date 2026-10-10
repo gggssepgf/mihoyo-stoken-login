@@ -1,0 +1,4 @@
+httpx>=0.27
+PyYAML>=6.0
+qrcode>=7.4
+pypng>=0.20220715.0

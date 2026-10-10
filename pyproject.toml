@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mihoyo-stoken-login"
+description = "米游社官方扫码登录，获取 App 端可用的 stoken（用于 MihoyoBBSTools 的米游社签到）"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "icywater" }]
+keywords = ["miyoushe", "mihoyo", "stoken", "mihoyobbstools"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "httpx>=0.27",
+    "PyYAML>=6.0",
+    "qrcode>=7.4",
+    "pypng>=0.20220715.0",
+]
+dynamic = ["version"]
+
+[project.scripts]
+mihoyo-stoken-login = "stoken_login:main"
+
+[project.gui-scripts]
+mihoyo-stoken-login-gui = "stoken_login_gui:main"
+
+[project.urls]
+Homepage = "https://github.com/gggssepgf/mihoyo-stoken-login"
+
+[tool.setuptools]
+py-modules = ["stoken_login", "stoken_login_gui"]
+
+[tool.setuptools.dynamic]
+version = { attr = "stoken_login.__version__" }

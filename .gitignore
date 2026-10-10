@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.spec
+.pytest_cache/
+.venv/
+venv/
+
+# 本地测试产物
+test-config.yaml
+qr*.png
