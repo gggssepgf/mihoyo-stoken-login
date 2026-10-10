@@ -36,6 +36,41 @@ STATUS_ERR = "#d93025"
 
 TEXT_PROMPT = "请用【米游社 App】扫描上方二维码，并在手机上点击确认"
 
+# 各平台常见的中文字体，Tk 找不到会自动回退到系统默认字体
+_FONT_FAMILY = {
+    "win32": "Microsoft YaHei UI",
+    "darwin": "PingFang SC",
+}
+
+def platform_symbols(platform: str) -> tuple:
+    """状态栏用的符号。
+
+    Linux 上很多环境没装 emoji 字体，✅/❌/📋 会渲染成方块，所以非 Windows/macOS 换 ASCII 符号。
+    """
+    if platform in ("win32", "darwin"):
+        return "✅", "❌", "📋"
+    return "√", "×", "»"
+
+
+SYM_OK, SYM_ERR, SYM_CLIP = platform_symbols(sys.platform)
+
+
+_MONO_FAMILY = {
+    "win32": "Consolas",
+    "darwin": "Menlo",
+}
+
+
+def ui_font(size: int = 10, weight: str = "normal") -> tuple:
+    """按平台挑中文字体，避免把 Windows 字体名硬编码到 Linux/macOS 上"""
+    family = _FONT_FAMILY.get(sys.platform, "Noto Sans CJK SC")
+    return (family, size, weight)
+
+
+def mono_font(size: int = 10) -> tuple:
+    """等宽字体（结果文本框用）"""
+    return (_MONO_FAMILY.get(sys.platform, "DejaVu Sans Mono"), size)
+
 
 def format_result(result: Dict[str, Any]) -> str:
     """把结果排版成方便复制的一段文本。
@@ -108,7 +143,7 @@ class App:
         # ---- 状态 ----
         self.status_var = tk.StringVar(value="准备中…")
         tk.Label(root, textvariable=self.status_var, fg=STATUS_INFO,
-                 font=("Microsoft YaHei UI", 12, "bold"), anchor="w").pack(fill="x", padx=14, pady=(12, 4))
+                 font=ui_font(12, "bold"), anchor="w").pack(fill="x", padx=14, pady=(12, 4))
 
         # ---- 二维码 ----
         self.qr_frame = tk.Frame(root, bg="#ffffff", width=320, height=320)
@@ -119,7 +154,7 @@ class App:
 
         self.tip_var = tk.StringVar(value=TEXT_PROMPT)
         tk.Label(root, textvariable=self.tip_var, fg="#5f6368",
-                 font=("Microsoft YaHei UI", 10)).pack(pady=(0, 6))
+                 font=ui_font(10)).pack(pady=(0, 6))
 
         # ---- 二维码链接（可复制，方便在手机上直接打开）----
         link_row = tk.Frame(root)
@@ -132,12 +167,12 @@ class App:
 
         # ---- 结果 ----
         tk.Label(root, text="登录结果（可自行选中复制）", anchor="w",
-                 font=("Microsoft YaHei UI", 10, "bold")).pack(fill="x", padx=14, pady=(12, 2))
+                 font=ui_font(10, "bold")).pack(fill="x", padx=14, pady=(12, 2))
         text_frame = tk.Frame(root)
         text_frame.pack(fill="both", expand=True, padx=14)
         text_frame.rowconfigure(0, weight=1)
         text_frame.columnconfigure(0, weight=1)
-        self.text = tk.Text(text_frame, height=13, wrap="none", font=("Consolas", 10))
+        self.text = tk.Text(text_frame, height=13, wrap="none", font=mono_font(10))
         yscroll = tk.Scrollbar(text_frame, orient="vertical", command=self.text.yview)
         xscroll = tk.Scrollbar(text_frame, orient="horizontal", command=self.text.xview)
         self.text.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
@@ -186,7 +221,7 @@ class App:
         self.text.delete("1.0", "end")
         self.url_var.set("")
         self.qr_label.configure(image="", text="正在申请二维码…", fg="#5f6368",
-                                font=("Microsoft YaHei UI", 10))
+                                font=ui_font(10))
         self._fit_frame(self.qr_target, self.qr_target)
         self.tip_var.set(TEXT_PROMPT)
         self.btn_cookies.configure(state="disabled")
@@ -244,8 +279,8 @@ class App:
         self.result = result
         # 二维码用完了，收起来给结果腾地方
         self.qr_photo = None
-        self.qr_label.configure(image="", text="✅ 登录成功\ncookies 已自动复制到剪贴板",
-                                fg=STATUS_OK, font=("Microsoft YaHei UI", 12, "bold"))
+        self.qr_label.configure(image="", text=f"{SYM_OK} 登录成功\ncookies 已自动复制到剪贴板",
+                                fg=STATUS_OK, font=ui_font(12, "bold"))
         self._fit_frame(300, 110)
         self.tip_var.set("已登录成功，内容在下方文本框；cookies 已进剪贴板，可直接粘贴使用")
         self.text.delete("1.0", "end")
@@ -255,7 +290,7 @@ class App:
 
         # 自动复制 cookies + 提示
         self.copy(result.get("cookies", ""), "cookies", silent=True)
-        self._set_status("✅ 登录成功，cookies 已自动复制到剪贴板", STATUS_OK)
+        self._set_status(f"{SYM_OK} 登录成功，cookies 已自动复制到剪贴板", STATUS_OK)
         try:
             self.root.bell()
         except Exception:
@@ -271,19 +306,19 @@ class App:
                 backup = core.write_config(self.config_path, result["uid"], result["stoken"],
                                            result["mid"], result.get("ltoken", ""),
                                            result.get("cookie_token", ""))
-                self._set_status(f"✅ cookies 已复制，并写入 {self.config_path}"
+                self._set_status(f"{SYM_OK} cookies 已复制，并写入 {self.config_path}"
                                  f"（备份 {os.path.basename(backup)}）", STATUS_OK)
             except SystemExit as exc:
-                self._set_status(f"⚠️ 已复制到剪贴板，但写配置失败：{exc}", STATUS_ERR)
+                self._set_status(f"{SYM_ERR} 已复制到剪贴板，但写配置失败：{exc}", STATUS_ERR)
 
     def _on_error(self, message: str) -> None:
         self.running = False
         self.qr_photo = None
-        self.qr_label.configure(image="", text="❌ 二维码已失效\n点下面「重新申请二维码」重试",
-                                fg=STATUS_ERR, font=("Microsoft YaHei UI", 11, "bold"))
+        self.qr_label.configure(image="", text=f"{SYM_ERR} 二维码已失效\n点下面「重新申请二维码」重试",
+                                fg=STATUS_ERR, font=ui_font(11, "bold"))
         self._fit_frame(300, 110)
         self.tip_var.set(TEXT_PROMPT)
-        self._set_status(f"❌ {message}", STATUS_ERR)
+        self._set_status(f"{SYM_ERR} {message}", STATUS_ERR)
 
     # ------------------------------------------------------------------ #
     def copy(self, value: str, what: str = "内容", silent: bool = False) -> None:
@@ -294,7 +329,7 @@ class App:
         self.root.update()  # 让剪贴板在窗口失焦后仍然有效
         self.last_copied = value
         if not silent:
-            self._set_status(f"📋 已复制{what}到剪贴板（{len(value)} 字符）", STATUS_OK)
+            self._set_status(f"{SYM_CLIP} 已复制{what}到剪贴板（{len(value)} 字符）", STATUS_OK)
 
 
 def main(argv: Optional[list] = None) -> int:

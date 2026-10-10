@@ -12,3 +12,7 @@ venv/
 # 本地测试产物
 test-config.yaml
 qr*.png
+
+# 截图里可能含 stoken，别提交
+*-shot*.png
+linux-gui*.png

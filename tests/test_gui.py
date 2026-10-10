@@ -216,12 +216,21 @@ def test_app_error_path(root, monkeypatch):
     app.start()
     for _ in range(50):
         root.update()
-        if "❌" in app.status_var.get():
+        if gui.SYM_ERR in app.status_var.get():
             break
         app._drain()
         core.time.sleep(0.02)
-    assert "❌" in app.status_var.get()
+    assert gui.SYM_ERR in app.status_var.get()
     assert app.running is False
+
+
+def test_symbols_are_ascii_friendly():
+    """Linux 上没装 emoji 字体会渲染成方块，所以非 Windows/macOS 用 ASCII 符号"""
+    assert gui.platform_symbols("linux") == ("√", "×", "»")
+    assert gui.platform_symbols("win32") == ("✅", "❌", "📋")
+    assert gui.platform_symbols("darwin") == ("✅", "❌", "📋")
+    # 当前平台取到的就是模块级符号
+    assert (gui.SYM_OK, gui.SYM_ERR, gui.SYM_CLIP) == gui.platform_symbols(gui.sys.platform)
 
 
 def test_app_writes_config_when_asked(root, monkeypatch, tmp_path):
@@ -241,6 +250,29 @@ def test_app_writes_config_when_asked(root, monkeypatch, tmp_path):
 def test_gui_module_has_main():
     assert callable(gui.main)
     assert gui.format_result(RESULT)
+
+
+# --------------------------------------------------------------------------- #
+# 字体：不能把 Windows 的字体名硬编码到 Linux/macOS 上
+# --------------------------------------------------------------------------- #
+def test_ui_font_is_platform_aware(monkeypatch):
+    cases = {"win32": "Microsoft YaHei UI", "darwin": "PingFang SC", "linux": "Noto Sans CJK SC"}
+    for platform, family in cases.items():
+        monkeypatch.setattr(gui.sys, "platform", platform)
+        assert gui.ui_font(10)[0] == family
+        assert gui.ui_font(12, "bold") == (family, 12, "bold")
+    monkeypatch.setattr(gui.sys, "platform", "win32")
+    assert gui.mono_font(10) == ("Consolas", 10)
+
+
+def test_no_hardcoded_windows_font_in_source():
+    """源码里不应该再出现写死的 Windows 字体名"""
+    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "stoken_login_gui.py"), encoding="utf-8").read()
+    assert "Microsoft YaHei UI" in src, "字体表里应该保留 Windows 项"
+    # 只允许出现在 _FONT_FAMILY 里一次
+    assert src.count("Microsoft YaHei UI") == 1
+    assert '("Consolas", 10)' not in src
 
 
 # --------------------------------------------------------------------------- #
